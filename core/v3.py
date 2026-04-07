@@ -8,7 +8,7 @@ def assemble_video(visual_paths, audio_paths, output_path="final_video.mp4"):
 
         c = (
             ImageClip(img)
-            .resize((1280, 720))
+            .with_size((1280, 720))
             .set_duration(a.duration)
             .set_audio(a)
             .fadein(0.5)
