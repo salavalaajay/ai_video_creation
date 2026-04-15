@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 streamlit
 openai
 edge-tts
@@ -5,3 +6,13 @@ moviepy
 pillow
 python-dotenv
 requests
+=======
+streamlit
+moviepy
+pillow
+requests
+edge-tts
+openai
+imageio
+imageio-ffmpeg
+>>>>>>> 43bbe316785669a311c6ac506acfc4f4a132fab9
