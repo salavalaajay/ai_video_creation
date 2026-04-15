@@ -1,7 +1,9 @@
 from pathlib import Path
 from typing import Iterable, List, Tuple
-
 from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def assemble_video(
@@ -10,97 +12,58 @@ def assemble_video(
     output_path: str = "output.mp4",
     size: Tuple[int, int] = (1280, 720),
     fps: int = 24,
-    codec: str = "libx264",
-    audio_codec: str = "aac",
 ) -> str:
-    """Assemble a video from image and audio files.
 
-    Each image is shown for the duration of its corresponding audio clip.
-    """
+    images = list(images)
+    audios = list(audios)
 
-    images_list: List[str] = list(images)
-    audios_list: List[str] = list(audios)
-
-    if not images_list:
-        raise ValueError("No image files provided to assemble_video.")
-    if not audios_list:
-        raise ValueError("No audio files provided to assemble_video.")
-    if len(images_list) != len(audios_list):
-        raise ValueError(
-            f"images and audios must have the same number of items: "
-            f"{len(images_list)} image(s), {len(audios_list)} audio(s)."
-        )
-
-    output_file = Path(output_path)
-    output_file.parent.mkdir(parents=True, exist_ok=True)
+    if len(images) != len(audios):
+        raise ValueError("Images and audio mismatch")
 
     clips = []
-    audio_clips = []
-    final_video = None
 
-    try:
-        for index, (img_path, aud_path) in enumerate(zip(images_list, audios_list), start=1):
-            img_file = Path(img_path)
-            aud_file = Path(aud_path)
+    for i, (img, aud) in enumerate(zip(images, audios), start=1):
+        img_path = Path(img)
+        aud_path = Path(aud)
 
-            if not img_file.exists():
-                print(f"Warning: image file not found, skipping clip {index}: {img_file}")
-                continue
-            if not aud_file.exists():
-                print(f"Warning: audio file not found, skipping clip {index}: {aud_file}")
-                continue
+        if not img_path.exists() or not aud_path.exists():
+            raise FileNotFoundError(f"Missing file at index {i}")
 
-            audio_clip = None
-            try:
-                audio_clip = AudioFileClip(str(aud_file))
-                clip = (
-                    ImageClip(str(img_file))
-                    .set_duration(audio_clip.duration)
-                    .resize(newsize=size)
-                    .set_audio(audio_clip)
-                )
+        try:
+            audio = AudioFileClip(str(aud_path))
 
-                audio_clips.append(audio_clip)
-                clips.append(clip)
+            if audio.duration <= 0:
+                raise ValueError("Invalid audio duration")
 
-            except Exception as exc:
-                print(f"Error processing pair {index} ({img_file}, {aud_file}): {exc}")
-                if audio_clip is not None:
-                    try:
-                        audio_clip.close()
-                    except Exception:
-                        pass
-
-        if not clips:
-            raise RuntimeError(
-                "No video clips could be created. Verify that input image and audio files exist and are valid."
+            clip = (
+                ImageClip(str(img_path))
+                .resize(height=size[1])
+                .set_duration(audio.duration)
+                .set_audio(audio)
             )
 
-        final_video = concatenate_videoclips(clips, method="compose")
-        final_video.write_videofile(
-            str(output_file),
-            fps=fps,
-            codec=codec,
-            audio_codec=audio_codec,
-        )
+            clips.append(clip)
 
-        return str(output_file)
+        except Exception as e:
+            logger.error(f"Clip error {i}: {e}")
+            raise
 
-    finally:
-        if final_video is not None:
-            try:
-                final_video.close()
-            except Exception:
-                pass
+    final = concatenate_videoclips(clips, method="compose")
 
-        for clip in clips:
-            try:
-                clip.close()
-            except Exception:
-                pass
+    final.write_videofile(
+        output_path,
+        fps=fps,
+        codec="libx264",
+        audio_codec="aac",
+        threads=4
+    )
 
-        for audio_clip in audio_clips:
-            try:
-                audio_clip.close()
-            except Exception:
-                pass
+    final.close()
+    for c in clips:
+        c.close()
+
+    if not Path(output_path).exists():
+        raise RuntimeError("Video creation failed")
+
+    logger.info("Video created successfully")
+    return output_path
